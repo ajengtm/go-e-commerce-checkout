@@ -1,3 +1,9 @@
+### Root Cause Analysis and Solution Proposal for 12.12 Event - Misreported Inventory Quantities Due to High Traffic
+
+I believe the bad reviews during our 12.12 event were due to high traffic, causing SELECT processes within the same microsecond to return the same stock data inconsistently. My solution involves implementing Explicit Row-Level Locking on the stock column, which can increase or decrease as needed. By using Row-Level Locking, a queueing process occurs, where rows are locked using SELECT FOR UPDATE.
+
+How SELECT FOR UPDATE works is that when selecting a row, that row is locked until the update process completes. This locking effect ensures that if another request tries to select the same row, it must wait for the previous request to release the lock.
+
 ### Step-by-Step Instructions
 
 ### 1. Set Up PostgreSQL

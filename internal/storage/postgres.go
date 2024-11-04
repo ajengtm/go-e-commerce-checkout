@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"main.go/pkg/item"
 )
@@ -36,16 +38,40 @@ func AddItemToCart(userID string, itemID, quantity int) error {
 
 // DecreaseStock decreases the stock of an item after a successful payment.
 func DecreaseStock(cartItems map[int]int) error {
-	for itemID, quantity := range cartItems {
-		// Decrease the stock for each item in the cart
-		_, err := DB.Exec(context.Background(),
-			`UPDATE items SET stock = stock - $1 WHERE id = $2 AND stock >= $1`,
-			quantity, itemID)
+	tx, err := DB.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
 
+	for itemID, quantity := range cartItems {
+		// Lock the row for update and check stock
+		var stock int
+		err := tx.QueryRow(context.Background(),
+			`SELECT stock FROM items WHERE id = $1 FOR UPDATE`,
+			itemID).Scan(&stock)
+		if err != nil {
+			return err
+		}
+
+		if stock < quantity {
+			return fmt.Errorf("not enough stock for item %d", itemID)
+		}
+
+		// Decrease the stock for each item in the cart
+		_, err = tx.Exec(context.Background(),
+			`UPDATE items SET stock = stock - $1 WHERE id = $2`,
+			quantity, itemID)
 		if err != nil {
 			return err
 		}
 	}
+
+	err = tx.Commit(context.Background())
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
